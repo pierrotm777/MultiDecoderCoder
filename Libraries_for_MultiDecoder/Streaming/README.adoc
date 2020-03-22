@@ -1,0 +1,3 @@
+= Streaming for Arduino =
+
+Streaming C++-style Output with Operator <<.
