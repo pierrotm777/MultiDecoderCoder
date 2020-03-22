@@ -64,7 +64,7 @@
 	j set JETIEx mode
 	f set Failsafe values
 	
- The DECODER know the protocols PPM, SBUS, IBUS, DSMX, SRLX, SUMD and JETIEx (Pro Micro only).
+ The DECODER mode know the protocols PPM, SBUS, IBUS, DSMX, SRLX, SUMD and JETIEx (Pro Micro only).
  
  The CODER mode know the protocols PPM and SBUS only.
 
