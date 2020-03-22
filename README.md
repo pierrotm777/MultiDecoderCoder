@@ -29,6 +29,7 @@
  
 	Version:0.40
 	Wait Return...
+	
 	Starting without configuration
 	Decoder in use
 	Failsafe is Off
@@ -39,6 +40,7 @@
  
 	Version:0.40
 	Wait Return.
+	
 	Configuration mode is actived
 	Decoder in use
 	Failsafe is Off
