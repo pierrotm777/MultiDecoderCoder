@@ -28,7 +28,6 @@
  The console will return:
 	Version:0.40
 	Wait Return...
-
 	Starting without configuration
 	Decoder in use
 	Failsafe is Off
@@ -38,7 +37,6 @@
  If you use the ENTER key before the 3s, you enter in the Configuration mode.
 	Version:0.40
 	Wait Return.
-
 	Configuration mode is actived
 	Decoder in use
 	Failsafe is Off
