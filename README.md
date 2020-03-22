@@ -26,6 +26,7 @@
  After that, without new settings, the code start in PPM mode.
    
  The console will return:
+ 
 	Version:0.40
 	Wait Return...
 	Starting without configuration
@@ -35,6 +36,7 @@
 	PPM mode in use
 
  If you use the ENTER key before the 3s, you enter in the Configuration mode.
+ 
 	Version:0.40
 	Wait Return.
 	Configuration mode is actived
@@ -44,6 +46,7 @@
 	PPM mode in use
 
  Enter 'h' key (without cote) for the help.
+ 
 	h Help
 	q quit
 	0 set Decoder mode
