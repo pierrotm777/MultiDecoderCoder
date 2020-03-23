@@ -65,6 +65,12 @@
 	f set Failsafe values
 	
  The DECODER mode know the protocols PPM, SBUS, IBUS, DSMX, SRLX, SUMD and JETIEx (Pro Micro only).
- 
  The CODER mode know the protocols PPM and SBUS only.
+ 
+ How to connect your module:
+ 
+ - In DECODER mode, use the pin RX as input and VCC,GND as power.
+ Use D2 to D9 and D10 to D13, A0 to A3 as PWM output.
+ - In CODER mode, use the pin 11 as ouput and VCC,GNS as power.
+ Use D2 to D9 and D10 to D13 as PWM input. 
 
