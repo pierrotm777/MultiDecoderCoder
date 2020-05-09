@@ -4,14 +4,14 @@
 /* L'option Failsafe ne fonctionne qu'avec un Pro Mini */
 
 /* Décodeur pour commander jusqu'à 16 servos à partir d'un signal type:
- - PPM basé sur les librairies RC Navy (http://p.loussouarn.free.fr/arduino/arduino.html) 
- - SBUS basé sur les librairies FUTABA_SBUS https://github.com/mikeshub/FUTABA_SBUS/tree/master/FUTABA_SBUS
+ - PPM basé sur les librairies RC Navy https://github.com/RC-Navy/DigisparkArduinoIntegration/tree/master/libraries/DigisparkTinyCppmReader
+ - SBUS basé sur les librairies RC Navy https://github.com/RC-Navy/DigisparkArduinoIntegration/tree/master/libraries/RcBusRx
     Un inverseur du signal est nécessaire (http://www.ernstc.dk/arduino/sbus.html)
- - IBUS basé sur la librairie https://github.com/aanon4/FlySkyIBus 
+ - IBUS basé sur la librairie Rc Navy  https://github.com/RC-Navy/DigisparkArduinoIntegration/tree/master/libraries/RcBusRx
+ - SRXL basé sur les librairies RC Navy https://github.com/RC-Navy/DigisparkArduinoIntegration/tree/master/libraries/RcBusRx
+ - SUMD basé sur l'exemple Rc Navy https://github.com/RC-Navy/DigisparkArduinoIntegration/tree/master/libraries/RcBusRx
  - DSMX basé sur la librairie https://github.com/Quarduino/SpektrumSatellite
- - SRXL basé sur les librairies RC Navy (http://p.loussouarn.free.fr/arduino/arduino.html) 
- - SUMD basé sur l'exemple https://github.com/gregd72002/sumd2ppm
- - JETIEX basé sur la librairie https://github.com/Sepp62/JetiExBus
+ - JETIEX basé sur la librairie Rc Navy https://github.com/RC-Navy/DigisparkArduinoIntegration/tree/master/libraries/RcBusRx
 */
 
 /*
@@ -22,24 +22,18 @@
  */
  
 
-//#define SERIAL_SUM_PPM         PITCH,YAW,THROTTLE,ROLL,AUX1,AUX2,AUX3,AUX4,8,9,10,11 //For Graupner/Spektrum
-//#define SERIAL_SUM_PPM         ROLL,PITCH,THROTTLE,YAW,AUX1,AUX2,AUX3,AUX4,8,9,10,11 //For Robe/Hitec/Futaba
-//#define SERIAL_SUM_PPM         ROLL,PITCH,YAW,THROTTLE,AUX1,AUX2,AUX3,AUX4,8,9,10,11 //For Multiplex
-//#define SERIAL_SUM_PPM         PITCH,ROLL,THROTTLE,YAW,AUX1,AUX2,AUX3,AUX4,8,9,10,11 //For some Hitec/Sanwa/Others
-
-
 #include <Rcul.h>
 #include <TinyPinChange.h>
 #include <SoftRcPulseOut.h>
 #include <SoftRcPulseIn.h>
-#include <TinyPpmReader.h>
-#include <TinyPpmGen.h>
+#include <TinyCppmReader.h>// configurer le le pour atmega328
+#include <TinyCppmGen.h>
 #include <EEPROM.h>
+#include <RcBusRx.h>
 #include <SBusTx.h>
-#include <SumdRx.h>
 #include <Streaming.h>
 
-float VERSION_DECODER = 0.4;
+float VERSION_DECODER = 0.5;
 
 #include <Vcc.h>
 const float VccMin   = 0.0;           // Minimum expected Vcc level, in Volts.
@@ -74,6 +68,7 @@ uint32_t LedStartMs=millis();
 unsigned long startedWaiting = millis();
 unsigned long started1s = millis();
 bool InFailsafeMode = true;
+bool InputSignalExist = false;
 
 #define LED_SIGNAL_FOUND      250
 #define LED_SIGNAL_NOTFOUND   1000
@@ -102,8 +97,7 @@ uint8_t SIGNAL_INPUT_PIN = 0; //PPM,SBUS,IBUS,DSMX,RXL,SUMD and JETIEx input
 
 uint8_t CHANNEL_NB = 8;     //8 ou 16
 
-//#define DEBUGSBUS
-
+TinyCppmReader TinyCppmReader; 
 
 SoftRcPulseOut myservo1;
 SoftRcPulseOut myservo2;
@@ -123,21 +117,12 @@ SoftRcPulseOut myservo14;
 SoftRcPulseOut myservo15;
 SoftRcPulseOut myservo16;
 
-int buf[25];
-int voie[18];
-int memread;
-int cpt;
-int s1,s2,s3,s4,s5,s6,s7,s8;
-int s9,s10,s11,s12,s13,s14,s15,s16;
-
 #include <FlySkyIBus.h>
 
 //#include <SpektrumSattelite.h>
 //SpektrumSattelite Dsmx;
 #include <DSMRX.h>
 DSM2048 Dsmx;
-
-#include <SrxlRx.h>
 
 
 boolean RunConfig = false;
@@ -173,27 +158,6 @@ int buffer_index = 0;
 #define PPM_MAX_CHANNELS 10
 volatile uint16_t ppm_channel_data[PPM_MAX_CHANNELS] = { 0 };
 
-//SUMD
-uint8_t rssi;
-uint8_t rx_count;
-uint16_t channel_count;
-uint16_t channels[16];
-
-#if defined(__AVR_ATmega32U4__)
-//JetiEx
-#include <JetiExBusProtocol.h>
-JetiExBusProtocol exBus;
-enum
-{
-  ID_VOLTAGE = 1
-};
-JETISENSOR_CONST sensors[] PROGMEM =
-{
-  // id             name          unit         data type             precision 
-  { ID_VOLTAGE,    "Voltage",    "V",         JetiSensor::TYPE_14b, 1 },
-  { 0 } // end of array
-};
-#endif
 
 void setup()
 {
@@ -305,7 +269,7 @@ void setup()
         if (type==0)
         {
           Serial.end();
-          TinyPpmReader.attach(SIGNAL_INPUT_PIN); // Attach TinyPpmReader to SIGNAL_INPUT_PIN pin 
+          TinyCppmReader.attach(SIGNAL_INPUT_PIN); // Attach TinyPpmReader to SIGNAL_INPUT_PIN pin 
         }
         else
         {
@@ -321,7 +285,7 @@ void setup()
 //           - ATmega32U4 (Arduino Leonardo, Micro and Pro Micro):
 //           TIMER(0), CHANNEL(A) -> OC0A -> PB7 -> Pin#11 (/!\ pin not available on connector of Pro Micro /!\)
 //           TIMER(0), CHANNEL(B) -> OC0B -> PD0 -> Pin#3
-          (pulsetype == 0?TinyPpmGen.begin(TINY_PPM_GEN_POS_MOD, CHANNEL_NB):TinyPpmGen.begin(TINY_PPM_GEN_NEG_MOD, CHANNEL_NB));// Change TINY_PPM_GEN_POS_MOD to TINY_PPM_GEN_NEG_MOD for NEGative PPM modulation
+          (pulsetype == 0?TinyCppmGen.begin(TINY_CPPM_GEN_POS_MOD, CHANNEL_NB):TinyCppmGen.begin(TINY_CPPM_GEN_NEG_MOD, CHANNEL_NB));// Change TINY_PPM_GEN_POS_MOD to TINY_PPM_GEN_NEG_MOD for NEGative PPM modulation
         }
       }
       break;
@@ -330,8 +294,10 @@ void setup()
       Serial << F("SBUS mode in use") << endl;
       if (RunConfig == false)
       {
-        Serial.flush();delay(500); // wait for last transmitted data to be sent
-        Serial.begin(100000, SERIAL_8E2);// Choose your serial first: SBUS works at 100 000 bauds 
+        Serial.flush();delay(500);
+        Serial.begin(SBUS_RX_SERIAL_CFG);
+        RcBusRx.serialAttach(&Serial);        
+        RcBusRx.setProto(RC_BUS_RX_SBUS);
         if (type == 1)
         {
           SBusTx.serialAttach(&Serial, SBUS_TX_NORMAL_TRAME_RATE_MS); // Attach the SBUS generator to the Serial with SBUS_TX_NORMAL_TRAME_RATE_MS or SBUS_TX_HIGH_SPEED_TRAME_RATE_MS 
@@ -343,8 +309,10 @@ void setup()
       Serial << F("IBUS mode in use") << endl;
       if (RunConfig == false)
       {
-        Serial.end();
-        IBus.begin(Serial);
+        Serial.flush();
+        Serial.begin(IBUS_RX_SERIAL_CFG);
+        RcBusRx.serialAttach(&Serial);        
+        RcBusRx.setProto(RC_BUS_RX_IBUS);
       }
       break;
     case 4:
@@ -362,8 +330,9 @@ void setup()
       if (RunConfig == false)
       {
         Serial.flush(); // wait for last transmitted data to be sent
-        Serial.begin(115200);
-        SrxlRx.serialAttach(&Serial);
+        Serial.begin(SRXL_RX_SERIAL_CFG);
+        RcBusRx.serialAttach(&Serial);        
+        RcBusRx.setProto(RC_BUS_RX_SRXL);
       }
       break;
     case 6:
@@ -372,25 +341,22 @@ void setup()
       if (RunConfig == false)
       {
         Serial.flush();
-        Serial.begin(115200);
-        for (uint8_t i=0;i<CHANNEL_NB;i++)
-        {
-          channels[i] = 1500;
-        }
+        Serial.begin(SUMD_RX_SERIAL_CFG);
+        RcBusRx.serialAttach(&Serial);        
+        RcBusRx.setProto(RC_BUS_RX_SUMD);
       }
       break;
-#if defined(__AVR_ATmega32U4__)
     case 7:
       blinkNTime(7,125,250);
       Serial << F("JETIEx mode in use") << endl;
       if (RunConfig == false)
       {
         Serial.flush();
-        exBus.SetDeviceId(0x76, 0x32); // 0x3276
-        exBus.Start("EX Bus", sensors, 0 ); // com port: 1..3 for Teeny, 0 or 1 for AtMega328PB UART0/UART1, others: not used 
+        Serial.begin(JETI_RX_SERIAL_CFG);
+        RcBusRx.serialAttach(&Serial);        
+        RcBusRx.setProto(RC_BUS_RX_JETI);
       }
       break;
-#endif
   }
 
   if (reverse == 0)
@@ -493,159 +459,79 @@ void loop()
     {  
       if (mode == 1)//PPM
       {
-        if (TinyPpmReader.isSynchro())
+        if (TinyCppmReader.isSynchro())
         {
+          InputSignalExist = true;
           //Idx=TinyPpmReader.width_us(1);Serial.print(F("Ch1"));Serial.print(F("="));Serial.print(Idx);Serial.println(F(" us"));
-          myservo1.write_us(TinyPpmReader.width_us(1));
-          myservo2.write_us(TinyPpmReader.width_us(2));
-          myservo3.write_us(TinyPpmReader.width_us(3));
-          myservo4.write_us(TinyPpmReader.width_us(4));
-          myservo5.write_us(TinyPpmReader.width_us(5));
-          myservo6.write_us(TinyPpmReader.width_us(6));
-          myservo7.write_us(TinyPpmReader.width_us(7));
-          myservo8.write_us(TinyPpmReader.width_us(8));
+          myservo1.write_us(TinyCppmReader.width_us(1));
+          myservo2.write_us(TinyCppmReader.width_us(2));
+          myservo3.write_us(TinyCppmReader.width_us(3));
+          myservo4.write_us(TinyCppmReader.width_us(4));
+          myservo5.write_us(TinyCppmReader.width_us(5));
+          myservo6.write_us(TinyCppmReader.width_us(6));
+          myservo7.write_us(TinyCppmReader.width_us(7));
+          myservo8.write_us(TinyCppmReader.width_us(8));
           if (CHANNEL_NB == 16)
           {
-            myservo9.write_us(TinyPpmReader.width_us(9));
-            myservo10.write_us(TinyPpmReader.width_us(10));
-            myservo11.write_us(TinyPpmReader.width_us(11));
-            myservo12.write_us(TinyPpmReader.width_us(12));
-            myservo13.write_us(TinyPpmReader.width_us(13));
-            myservo14.write_us(TinyPpmReader.width_us(14));
-            myservo15.write_us(TinyPpmReader.width_us(15));
-            myservo16.write_us(TinyPpmReader.width_us(16));          
+            myservo9.write_us(TinyCppmReader.width_us(9));
+            myservo10.write_us(TinyCppmReader.width_us(10));
+            myservo11.write_us(TinyCppmReader.width_us(11));
+            myservo12.write_us(TinyCppmReader.width_us(12));
+            myservo13.write_us(TinyCppmReader.width_us(13));
+            myservo14.write_us(TinyCppmReader.width_us(14));
+            myservo15.write_us(TinyCppmReader.width_us(15));
+            myservo16.write_us(TinyCppmReader.width_us(16));          
           }
           SoftRcPulseOut::refresh(1);
-          
-          // Blink each 250ms if PPM found on pin 2
-          if(millis()-LedStartMs>=LED_SIGNAL_FOUND)
-          {
-            flip(LED);
-            LedStartMs=millis(); // Restart the Chrono for the LED 
-          }   
+            
         }
         else
         {
-          // Blink each 1s if PPM not found on pin 2
-          if(millis()-LedStartMs>=LED_SIGNAL_NOTFOUND)
-          {
-            flip(LED);
-            LedStartMs=millis(); // Restart the Chrono for the LED 
-          }
-#if !defined(__AVR_ATmega32U4__)
+          InputSignalExist = false;
 //          if (failsafe == 1)
 //            readFailsafeValues();
-#endif
         }  
       }//PPM
      
-      if (mode == 2)//SBUS
+      if (mode == 2/*SBUS*/ || mode == 3/*IBUS*/ || mode == 5/*SRXL*/ || mode == 6/*SUMD*/ || mode == 7/*JETI*/)
       { 
-        recupSbusdata();// conversion des données SBUS pour les 16 Voies
-        while ( Serial.available() ) { // tant qu'un octet arrive sur le SBUS
-          int val = Serial.read();  // lecture de l'octet
-          if  (( memread == 0 ) and ( val == 15)) { // detection de la fin et debut de la trame SBUS (une trame fini par 0 et commence par 15)
-            cpt = 0; // remise a zero du compteur dans la trame
-          }
-          memread = val; // memorisation de la dernière valeur reçu
-          buf[cpt] = val; // stock la valeur reçu dans le buffer
-          cpt +=1;        // incrémente le compteur
-          if (cpt == 26) {cpt=0;} // au cas ou on aurait pas reçu les caractères de synchro on reset le compteur
-        } // fin du while
 
-      
-        //SbusDebug();
-        //ser = map(voie[3], 0, 2048, 0, 180);      // ecriture dans de la voie 3 pour la sortie servo 
-        s1 = map(voie[1], -100, +100, 900, 2100);
-        s2 = map(voie[2], -100, +100, 900, 2100);
-        s3 = map(voie[3], -100, +100, 900, 2100);
-        s4 = map(voie[4], -100, +100, 900, 2100);
-        s5 = map(voie[5], -100, +100, 900, 2100);
-        s6 = map(voie[6], -100, +100, 900, 2100);
-        s7 = map(voie[7], -100, +100, 900, 2100);
-        s8 = map(voie[8], -100, +100, 900, 2100);
-        myservo1.write_us(s1);
-        myservo2.write_us(s2);
-        myservo3.write_us(s3);
-        myservo4.write_us(s4);
-        myservo5.write_us(s5);
-        myservo6.write_us(s6);
-        myservo7.write_us(s7);
-        myservo8.write_us(s8);
-        if (CHANNEL_NB == 16){    
-          s9 = map(voie[9], -100, +100, 900, 2100);
-          s10 = map(voie[10], -100, +100, 900, 2100);
-          s11 = map(voie[11], -100, +100, 900, 2100);
-          s12 = map(voie[12], -100, +100, 900, 2100);
-          s13 = map(voie[13], -100, +100, 900, 2100);
-          s14 = map(voie[14], -100, +100, 900, 2100);
-          s15 = map(voie[15], -100, +100, 900, 2100);
-          s16 = map(voie[16], -100, +100, 900, 2100);
-          myservo9.write_us(s9);
-          myservo10.write_us(s10);
-          myservo11.write_us(s11);
-          myservo12.write_us(s12);
-          myservo13.write_us(s13);
-          myservo14.write_us(s14);
-          myservo15.write_us(s15);
-          myservo16.write_us(s16);
-        }
-        SoftRcPulseOut::refresh(1);
-      }//sbus
-      
-      if (mode == 3)//IBUS
-      {
-        IBus.loop();
-        if (IBus.readChannel(0) > 0)
+        RcBusRx.process(); /* Don't forget to call the SBusRx.process()! */
+        if(RcBusRx.isSynchro()) /* One SBUS frame just arrived */
         {
-          myservo1.write_us(IBus.readChannel(0));
-          myservo2.write_us(IBus.readChannel(1));
-          myservo3.write_us(IBus.readChannel(2));
-          myservo4.write_us(IBus.readChannel(3));
-          myservo5.write_us(IBus.readChannel(4));
-          myservo6.write_us(IBus.readChannel(5));
-          myservo7.write_us(IBus.readChannel(6));
-          myservo8.write_us(IBus.readChannel(7));
-          if (CHANNEL_NB == 16)
-          {
-            myservo9.write_us(IBus.readChannel(8));
-            myservo10.write_us(IBus.readChannel(9));
-            myservo11.write_us(IBus.readChannel(10));
-            myservo12.write_us(IBus.readChannel(11));
-            myservo13.write_us(IBus.readChannel(12));
-            myservo14.write_us(IBus.readChannel(13));
-            myservo15.write_us(IBus.readChannel(14));
-            myservo16.write_us(IBus.readChannel(15));                  
+          InputSignalExist = true;
+          myservo1.write_us(RcBusRx.width_us(1));
+          myservo2.write_us(RcBusRx.width_us(2));
+          myservo3.write_us(RcBusRx.width_us(3));
+          myservo4.write_us(RcBusRx.width_us(4));
+          myservo5.write_us(RcBusRx.width_us(5));
+          myservo6.write_us(RcBusRx.width_us(6));
+          myservo7.write_us(RcBusRx.width_us(7));
+          myservo8.write_us(RcBusRx.width_us(8));
+          if (CHANNEL_NB == 16){
+            myservo9.write_us(RcBusRx.width_us(9));
+            myservo10.write_us(RcBusRx.width_us(10));
+            myservo11.write_us(RcBusRx.width_us(11));
+            myservo12.write_us(RcBusRx.width_us(12));
+            myservo13.write_us(RcBusRx.width_us(13));
+            myservo14.write_us(RcBusRx.width_us(14));
+            myservo15.write_us(RcBusRx.width_us(15));
+            myservo16.write_us(RcBusRx.width_us(16));
           }
-          SoftRcPulseOut::refresh(1);
-  
-          // Blink each 250ms if SBUS found on Rx pin
-          if(millis()-LedStartMs>=LED_SIGNAL_FOUND)
-          {
-            flip(LED);
-            LedStartMs=millis(); // Restart the Chrono for the LED 
-          }  
+          SoftRcPulseOut::refresh(1);      
         }
         else
         {
-          // Blink each 1s if SBUS not found on Rx pin
-          if(millis()-LedStartMs>=LED_SIGNAL_NOTFOUND)
-          {
-            flip(LED);
-            LedStartMs=millis(); // Restart the Chrono for the LED 
-          }
-#if !defined(__AVR_ATmega32U4__)          
-//          if (failsafe == 1)
-//            readFailsafeValues();
-#endif  
-        }  
-      }
-  
- 
+          InputSignalExist = false;
+        }
+
+      }//mode == 2/*SBUS*/ || mode == 3/*IBUS*/ || mode == 5/*SRXL*/ || mode == 6/*SUMD*/
+
       if (mode == 4)//DSMX
       {
         if (Dsmx.gotNewFrame()) 
         {
+          InputSignalExist = true;
           uint16_t ch[CHANNEL_NB];
           Dsmx.getChannelValues(ch, CHANNEL_NB);
           myservo1.write_us(ch[0]);
@@ -668,154 +554,15 @@ void loop()
             myservo16.write_us(ch[15]);  
           }
           SoftRcPulseOut::refresh(1);
-          // Blink each 250ms if DSMX found on Rx pin
-          if(millis()-LedStartMs>=LED_SIGNAL_FOUND)
-          {
-            flip(LED);
-            LedStartMs=millis(); // Restart the Chrono for the LED 
-          }  
           //Serial.print("Fade count = ");
           //Serial.println(rx.getFadeCount());
         }
         else  if (Dsmx.timedOut(micros())) 
         {
-          //Serial.println("*** TIMED OUT ***");
-         // Blink each 1000ms if DSMX not found on Rx pin
-          if(millis()-LedStartMs>=LED_SIGNAL_NOTFOUND)
-          {
-            flip(LED); 
-            LedStartMs=millis(); // Restart the Chrono for the LED 
-          }
+          InputSignalExist = false;
         }
       }//DSMX
-  
-      if (mode == 5)//SRXL (Multiplex)
-      { 
-        SrxlRx.process();
-        if(SrxlRx.isSynchro()) // One SRLX frame just arrived 
-        {
-          myservo1.write_us(SrxlRx.width_us(1));
-          myservo2.write_us(SrxlRx.width_us(2));
-          myservo3.write_us(SrxlRx.width_us(3));
-          myservo4.write_us(SrxlRx.width_us(4));
-          myservo5.write_us(SrxlRx.width_us(5));
-          myservo6.write_us(SrxlRx.width_us(6));
-          myservo7.write_us(SrxlRx.width_us(7));
-          myservo8.write_us(SrxlRx.width_us(8));
-          if (CHANNEL_NB == 16){    
-            myservo9.write_us(SrxlRx.width_us(9));
-            myservo10.write_us(SrxlRx.width_us(10));
-            myservo11.write_us(SrxlRx.width_us(11));
-            myservo12.write_us(SrxlRx.width_us(12));
-            myservo13.write_us(SrxlRx.width_us(13));
-            myservo14.write_us(SrxlRx.width_us(14));
-            myservo15.write_us(SrxlRx.width_us(15));
-            myservo16.write_us(SrxlRx.width_us(16));
-          }    
-          SoftRcPulseOut::refresh(1);
-          // Blink each 250ms if SRXL found on Rx pin
-          if(millis()-LedStartMs>=LED_SIGNAL_FOUND)
-          {
-            flip(LED); 
-            LedStartMs=millis(); // Restart the Chrono for the LED 
-          }  
-        }
-        else
-        {
-          // Blink each 1s if SRXL not found on Rx pin
-          if(millis()-LedStartMs>=LED_SIGNAL_NOTFOUND)
-          {
-            flip(LED);
-            LedStartMs=millis(); // Restart the Chrono for the LED 
-          }
-#if !defined(__AVR_ATmega32U4__)
-//          if (failsafe == 1)
-//            readFailsafeValues();
-#endif
-        }
-  
-      }//srxl
-
-      if (mode == 6)//SUMD Graupner
-      {
-        if (!Serial.available()) return;
-        uint8_t c = Serial.read();
-        int ret = sumd_decode(c, &rssi, &rx_count, &channel_count, channels, CHANNEL_NB);
-        if (ret) return;  //sumd_decode returns 0 on decoded packet
-        for (uint8_t i=channel_count;i<CHANNEL_NB;i++) //unused channels
-        {
-          channels[i] = 1500;
-        }
-        myservo1.write_us(channels[1]);
-        myservo2.write_us(channels[2]);
-        myservo3.write_us(channels[3]);
-        myservo4.write_us(channels[4]);
-        myservo5.write_us(channels[5]);
-        myservo6.write_us(channels[6]);
-        myservo7.write_us(channels[7]);
-        myservo8.write_us(channels[8]);
-        if (CHANNEL_NB == 16){    
-          myservo9.write_us(channels[9]);
-          myservo10.write_us(channels[10]);
-          myservo11.write_us(channels[11]);
-          myservo12.write_us(channels[12]);
-          myservo13.write_us(channels[13]);
-          myservo14.write_us(channels[14]);
-          myservo15.write_us(channels[15]);
-          myservo16.write_us(channels[16]);   
-        }
-        SoftRcPulseOut::refresh(1);
-        // Blink each 250ms if SUMD found on Rx pin
-        if(millis()-LedStartMs>=LED_SIGNAL_FOUND)
-        {
-          flip(LED);
-          LedStartMs=millis(); // Restart the Chrono for the LED 
-        }  
-      }//SUMD
-     
-#if defined(__AVR_ATmega32U4__)
-      if (mode == 7)//JETI EX
-      {
-//        char bufJetiEx[30];
-//        if (false)
-//        // if ( exBus.HasNewChannelData() )
-//        {
-//          for (uint8_t i = 0; i < exBus.GetNumChannels(); i++)
-//          {
-//            sprintf(buf, "chan-%d: %d", i, exBus.GetChannel(i));
-//            //Serial.println(buf);
-//          }
-//        }
-        // run protocol state machine
-        exBus.DoJetiExBus();
-        myservo1.write_us(exBus.GetChannel(0));
-        myservo2.write_us(exBus.GetChannel(1));
-        myservo3.write_us(exBus.GetChannel(2));
-        myservo4.write_us(exBus.GetChannel(3));
-        myservo5.write_us(exBus.GetChannel(4));
-        myservo6.write_us(exBus.GetChannel(5));
-        myservo7.write_us(exBus.GetChannel(6));
-        myservo8.write_us(exBus.GetChannel(7));
-        if (CHANNEL_NB == 16){    
-          myservo9.write_us(exBus.GetChannel(8));
-          myservo10.write_us(exBus.GetChannel(9));
-          myservo11.write_us(exBus.GetChannel(10));
-          myservo12.write_us(exBus.GetChannel(11));
-          myservo13.write_us(exBus.GetChannel(12));
-          myservo14.write_us(exBus.GetChannel(13));
-          myservo15.write_us(exBus.GetChannel(14));
-          myservo16.write_us(exBus.GetChannel(15));   
-        }
-        SoftRcPulseOut::refresh(1);
-        // Blink each 250ms if JETIEx found on Rx pin
-        if(millis()-LedStartMs>=LED_SIGNAL_FOUND)
-        {
-          flip(LED);
-          LedStartMs=millis(); // Restart the Chrono for the LED 
-        }          
-      }//JETIEX
-#endif
-      
+       
     }//type 0
 
     if (type == 1)
@@ -823,14 +570,14 @@ void loop()
       switch (mode)
       {
         case 1://PPM out       
-          TinyPpmGen.setChWidth_us(1, pwm1.width_us()); 
-          TinyPpmGen.setChWidth_us(2, pwm2.width_us());
-          TinyPpmGen.setChWidth_us(3, pwm3.width_us()); 
-          TinyPpmGen.setChWidth_us(4, pwm4.width_us());
-          TinyPpmGen.setChWidth_us(5, pwm5.width_us()); 
-          TinyPpmGen.setChWidth_us(6, pwm6.width_us()); 
-          TinyPpmGen.setChWidth_us(7, pwm7.width_us()); 
-          TinyPpmGen.setChWidth_us(8, pwm8.width_us()); 
+          TinyCppmGen.setChWidth_us(1, pwm1.width_us()); 
+          TinyCppmGen.setChWidth_us(2, pwm2.width_us());
+          TinyCppmGen.setChWidth_us(3, pwm3.width_us()); 
+          TinyCppmGen.setChWidth_us(4, pwm4.width_us());
+          TinyCppmGen.setChWidth_us(5, pwm5.width_us()); 
+          TinyCppmGen.setChWidth_us(6, pwm6.width_us()); 
+          TinyCppmGen.setChWidth_us(7, pwm7.width_us()); 
+          TinyCppmGen.setChWidth_us(8, pwm8.width_us()); 
           break;
         case 2://SBUS out
           SBusTx.width_us(1, pwm1.width_us());
@@ -873,7 +620,30 @@ void loop()
 //    }
     
   }//runconfig
+
+
+  if(InputSignalExist == true)
+  {
+    // Blink each 250ms if IBUS found on Rx pin
+    if(millis()-LedStartMs>=LED_SIGNAL_FOUND)
+    {
+      flip(LED);
+      LedStartMs=millis(); // Restart the Chrono for the LED 
+    }              
+  }
+  else
+  {
+    // Blink each 1s if IBUS not found on Rx pin
+    if(millis()-LedStartMs>=LED_SIGNAL_NOTFOUND)
+    {
+      flip(LED);
+      LedStartMs=millis(); // Restart the Chrono for the LED 
+    }            
+  }
+
+  
 }//loop
+
 
 void handleSerialDecoder() {
   // we only care about two characters to change the pwm
@@ -892,11 +662,8 @@ void handleSerialDecoder() {
         Serial << F("d set DSMX mode") << endl;
         Serial << F("m set SRLX mode") << endl;
         Serial << F("u set SUMD mode") << endl;
-#if defined(__AVR_ATmega32U4__)
-        Serial << F("j set JETIEX mode") << endl << endl;
-#else
-        Serial << F("f set Failsafe values") << endl << endl;
-#endif
+        Serial << F("j set JETIEX mode") << endl;
+        Serial << F("f set Failsafe values") << endl;
       break;
       case 'q':
         Serial << F("Exit  configuration mode") << endl;
@@ -973,12 +740,10 @@ void handleSerialDecoder() {
         Serial << F("Set in SUMD mode") << endl;
         EEPROM.write(1,6);  
       break;
-#if defined(__AVR_ATmega32U4__)
       case 'j':
         Serial << F("Set in JETIEX mode") << endl;
         EEPROM.write(1,7);  
       break;
-#else
       case 'f':
         if (EEPROM.read(5) == 0)
         {
@@ -996,7 +761,6 @@ void handleSerialDecoder() {
           EEPROM.write(5,0);Serial << F("Failsafe mode is Off") << endl;
         }
       break;
-#endif
       case 'e':
         Serial << endl;
         for (int i = 0 ; i < EEPROM.length() ; i++) {
@@ -1158,65 +922,6 @@ void blinkNTime(int count, int onInterval, int offInterval)
     on(LED);      //     turn on LED//digitalWrite(LED_PIN,HIGH);
     waitMs(onInterval);
     off(LED);      //     turn on LED//digitalWrite(LED_PIN,LOW);  
-  }
-}
-
-void recupSbusdata(void){
-// récuperation des données SBUS et conversion dans le tableau des voies
-// les données SBUS sont sur 8 bits et les données des voies sont sur 11 bits
-// il faut donc jouer a cheval sur les octets pour calculer les voies.
-
-  voie[1]  = ((buf[1]|buf[2]<< 8) & 0x07FF);
-  voie[2]  = ((buf[2]>>3|buf[3]<<5) & 0x07FF);
-  voie[3]  = ((buf[3]>>6|buf[4]<<2|buf[5]<<10) & 0x07FF);
-  voie[4]  = ((buf[5]>>1|buf[6]<<7) & 0x07FF);
-  voie[5]  = ((buf[6]>>4|buf[7]<<4) & 0x07FF);
-  voie[6]  = ((buf[7]>>7|buf[8]<<1|buf[9]<<9) & 0x07FF);
-  voie[7]  = ((buf[9]>>2|buf[10]<<6) & 0x07FF);
-  voie[8]  = ((buf[10]>>5|buf[11]<<3) & 0x07FF);
- 
-  voie[9]  = ((buf[12]|buf[13]<< 8) & 0x07FF);
-  voie[10]  = ((buf[13]>>3|buf[14]<<5) & 0x07FF);
-  voie[11] = ((buf[14]>>6|buf[15]<<2|buf[16]<<10) & 0x07FF);
-  voie[12] = ((buf[16]>>1|buf[17]<<7) & 0x07FF);
-  voie[13] = ((buf[17]>>4|buf[18]<<4) & 0x07FF);
-  voie[14] = ((buf[18]>>7|buf[19]<<1|buf[20]<<9) & 0x07FF);
-  voie[15] = ((buf[20]>>2|buf[21]<<6) & 0x07FF);
-  voie[16] = ((buf[21]>>5|buf[22]<<3) & 0x07FF);
- 
-  ((buf[23]) & 1 )      ? voie[17] = 2047 : voie[17] = 0 ;
-  ((buf[23] >> 1) & 1 ) ? voie[18] = 2047 : voie[17] = 0 ;
- 
-  // detection du failsafe
-  if ((buf[23] >> 3) & 1) {
-    voie[0] = 0; // Failsafe
-  }
-  else
-  {
-    voie[0] = 1; // Normal
-  }
-  for(int x = 1; x<19 ; x++)
-  {
-    voie[x]= (lround(voie[x]/9.92) - 100);
-  }
-
-  if ((voie[1] > -100) && (voie[1] < 100))
-  {
-    // Blink each 250ms if SBUS found on Rx pin
-    if(millis()-LedStartMs>=LED_SIGNAL_FOUND)
-    {
-      flip(LED);
-      LedStartMs=millis(); // Restart the Chrono for the LED 
-    }  
-  }
-  else
-  {
-    // Blink each 1s if SBUS not found on Rx pin
-    if(millis()-LedStartMs>=LED_SIGNAL_NOTFOUND)
-    {
-      flip(LED);
-      LedStartMs=millis(); // Restart the Chrono for the LED 
-    }  
   }
 }
 

@@ -4,19 +4,19 @@
 	- Option Failsafe is running only with Pro Mini
 
  Decoder for maxi 16 servos for signals protols:
- - PPM based on libraries RC Navy (http://p.loussouarn.free.fr/arduino/arduino.html) 
- - SBUS based on libraries FUTABA_SBUS https://github.com/mikeshub/FUTABA_SBUS/tree/master/FUTABA_SBUS
+ - PPM based on libraries RC Navy https://github.com/RC-Navy/DigisparkArduinoIntegration/tree/master/libraries/DigisparkTinyCppmReader
+ - SBUS based on libraries RC Navy https://github.com/RC-Navy/DigisparkArduinoIntegration/tree/master/libraries/RcBusRx
 	A signal's reverse is needed (http://www.ernstc.dk/arduino/sbus.html)
- - IBUS based on librarie https://github.com/aanon4/FlySkyIBus 
+ - IBUS based on librarie RC Navy https://github.com/RC-Navy/DigisparkArduinoIntegration/tree/master/libraries/RcBusRx
  - DSMX based on librarie https://github.com/Quarduino/SpektrumSatellite
- - SRXL based on libraries RC Navy (http://p.loussouarn.free.fr/arduino/arduino.html) 
- - SUMD based on exemple https://github.com/gregd72002/sumd2ppm
- - JETIEX based on librarie https://github.com/Sepp62/JetiExBus
+ - SRXL based on libraries RC Navy https://github.com/RC-Navy/DigisparkArduinoIntegration/tree/master/libraries/RcBusRx
+ - SUMD based on exemple RC Navy https://github.com/RC-Navy/DigisparkArduinoIntegration/tree/master/libraries/RcBusRx
+ - JETIEX based on librarie RC Navy https://github.com/RC-Navy/DigisparkArduinoIntegration/tree/master/libraries/RcBusRx
 
  Coder convert 8 outputs servos PWM in:
  - PPM based on libraries RC Navy (http://p.loussouarn.free.fr/arduino/arduino.html) 
  - SBUS based on libraries RC Navy (http://p.loussouarn.free.fr/arduino/arduino.html) 
-
+ - IBUS
 
  How to use it:
  When you use your module the first time, you need to configure it.
