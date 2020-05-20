@@ -1,6 +1,0 @@
-FUTABA_SBUS	KEYWORD1
-begin	KEYWORD2
-UpdateServos	KEYWORD2
-UpdateChannels	KEYWORD2
-toChannels	KEYWORD2
-channels	KEYWORD2
