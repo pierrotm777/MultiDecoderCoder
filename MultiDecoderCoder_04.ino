@@ -12,6 +12,7 @@
  - SUMD basé sur l'exemple Rc Navy https://github.com/RC-Navy/DigisparkArduinoIntegration/tree/master/libraries/RcBusRx
  - DSMX basé sur la librairie https://github.com/Quarduino/SpektrumSatellite
  - JETIEX basé sur la librairie Rc Navy https://github.com/RC-Navy/DigisparkArduinoIntegration/tree/master/libraries/RcBusRx
+ - MULTIWII basé sur la librairie https://github.com/fdivitto/MSP
 */
 
 /*
@@ -33,7 +34,7 @@
 #include <SBusTx.h>
 #include <Streaming.h>
 
-float VERSION_DECODER = 0.5;
+float VERSION_DECODER = 0.6;
 
 #include <Vcc.h>
 const float VccMin   = 0.0;           // Minimum expected Vcc level, in Volts.
@@ -123,6 +124,9 @@ SoftRcPulseOut myservo16;
 //SpektrumSattelite Dsmx;
 #include <DSMRX.h>
 DSM2048 Dsmx;
+
+#include<MSP.h>
+MSP msp;
 
 
 boolean RunConfig = false;
@@ -357,6 +361,16 @@ void setup()
         RcBusRx.setProto(RC_BUS_RX_JETI);
       }
       break;
+    case 8:
+      blinkNTime(8,125,250);
+      Serial << F("MultiWii mode in use") << endl;
+      if (RunConfig == false)
+      {
+        Serial.flush();
+        Serial.begin(115200);
+        msp.begin(Serial);
+      }
+      break;      
   }
 
   if (reverse == 0)
@@ -449,6 +463,7 @@ void loop()
       //m set SRLX mode
       //u set SUMD mode
       //j set JETIEx mode
+      //k set MULTIWII mode
       //f set Failsafe values
       
       //e reset EEPROM (command hidden)   
@@ -562,6 +577,38 @@ void loop()
           InputSignalExist = false;
         }
       }//DSMX
+
+      if (mode == 7)//MULTIWII
+      {
+        msp_rc_t rc;
+        if (msp.request(MSP_RC, &rc, sizeof(rc))) {
+          
+//          uint16_t roll     = rc.channelValue[0];
+//          uint16_t pitch    = rc.channelValue[1];
+//          uint16_t yaw      = rc.channelValue[2];
+//          uint16_t throttle = rc.channelValue[3];
+          myservo1.write_us(rc.channelValue[0]);
+          myservo2.write_us(rc.channelValue[1]);
+          myservo3.write_us(rc.channelValue[2]);
+          myservo4.write_us(rc.channelValue[3]);
+          myservo5.write_us(rc.channelValue[4]);
+          myservo6.write_us(rc.channelValue[5]);
+          myservo7.write_us(rc.channelValue[6]);
+          myservo8.write_us(rc.channelValue[7]);
+          if (CHANNEL_NB == 16)
+          {
+            myservo9.write_us(rc.channelValue[8]);
+            myservo10.write_us(rc.channelValue[9]);
+            myservo11.write_us(rc.channelValue[10]);
+            myservo12.write_us(rc.channelValue[11]);
+            myservo13.write_us(rc.channelValue[12]);
+            myservo14.write_us(rc.channelValue[13]);
+            myservo15.write_us(rc.channelValue[14]);
+            myservo16.write_us(rc.channelValue[15]);  
+          }
+          SoftRcPulseOut::refresh(1);
+        }              
+      }
        
     }//type 0
 
@@ -663,6 +710,7 @@ void handleSerialDecoder() {
         Serial << F("m set SRLX mode") << endl;
         Serial << F("u set SUMD mode") << endl;
         Serial << F("j set JETIEX mode") << endl;
+        Serial << F("k set MULTIWII mode") << endl;
         Serial << F("f set Failsafe values") << endl;
       break;
       case 'q':
@@ -744,6 +792,10 @@ void handleSerialDecoder() {
         Serial << F("Set in JETIEX mode") << endl;
         EEPROM.write(1,7);  
       break;
+      case 'k':
+        Serial << F("Set in MULTIWII mode") << endl;
+        EEPROM.write(1,8);  
+      break;      
       case 'f':
         if (EEPROM.read(5) == 0)
         {
