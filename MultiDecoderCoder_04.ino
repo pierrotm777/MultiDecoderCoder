@@ -125,6 +125,7 @@ SoftRcPulseOut myservo16;
 #include <DSMRX.h>
 DSM2048 Dsmx;
 
+//MultiWII
 #include<MSP.h>
 MSP msp;
 
@@ -172,8 +173,9 @@ void setup()
   in(FAILSAFE_BUTTON);
   pullup(FAILSAFE_BUTTON);
   
+  while (!Serial);// wait for serial port to connect.  
   Serial.begin(115200); 
-  while (!Serial);// wait for serial port to connect.
+
   Serial << F("Version:")<< EEPROMReadFloat(500) << endl;
   if (EEPROMReadFloat(500) != VERSION_DECODER)
   {
@@ -192,7 +194,7 @@ void setup()
     String sdata="";
     Serial << F("Wait Return");
     byte ch;
-    while(millis() - startedWaiting <= 3000) //waiting 3s return key
+    while(millis() - startedWaiting <= 5000) //waiting 5s return key
     { 
       /* Check 1s */
       if(millis()-started1s>=1000)
