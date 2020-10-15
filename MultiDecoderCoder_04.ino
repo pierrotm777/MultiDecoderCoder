@@ -21,7 +21,11 @@
  - SBUS basé sur les librairies RC Navy (http://p.loussouarn.free.fr/arduino/arduino.html) 
  - IBUS
  */
- 
+
+ /*
+  * Use this link for your program your Pro Micro board
+  * https://raw.githubusercontent.com/sparkfun/Arduino_Boards/master/IDE_Board_Manager/package_sparkfun_index.json
+  */
 
 #include <Rcul.h>
 #include <TinyPinChange.h>
@@ -300,12 +304,17 @@ void setup()
       Serial << F("SBUS mode in use") << endl;
       if (RunConfig == false)
       {
-        Serial.flush();delay(500);
-        Serial.begin(SBUS_RX_SERIAL_CFG);
-        RcBusRx.serialAttach(&Serial);        
-        RcBusRx.setProto(RC_BUS_RX_SBUS);
-        if (type == 1)
+        if (type == 0)
         {
+          Serial.flush();delay(500);
+          Serial.begin(SBUS_RX_SERIAL_CFG);
+          RcBusRx.serialAttach(&Serial);        
+          RcBusRx.setProto(RC_BUS_RX_SBUS);
+        }
+        else if (type == 1)
+        {
+          Serial.flush();delay(500);
+          Serial.begin(100000, SERIAL_8E2);
           SBusTx.serialAttach(&Serial, SBUS_TX_NORMAL_TRAME_RATE_MS); // Attach the SBUS generator to the Serial with SBUS_TX_NORMAL_TRAME_RATE_MS or SBUS_TX_HIGH_SPEED_TRAME_RATE_MS 
         }
       }
